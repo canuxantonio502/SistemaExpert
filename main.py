@@ -221,16 +221,87 @@ def consultar():
     print()
     print('=' * 55)
     print('  SISTEMA EXPERTO: Diagnóstico de Computador')
-    print('  Responde s (sí) o n (no) a cada pregunta')
+    print('  1 - Responder preguntas para llegar a un diágnostico')
+    print('  2 - Confirmar un diagnóstico (Backward-Chain)')
     print('=' * 55)
     print()
+    opc = int(input('Seleccione a opción a ejecutar:'))
 
-    for sintoma, pregunta in PREGUNTAS.items():
-        resp = input(f'  {pregunta} [s/n]: ').strip().lower()
-        if resp == 's':
-            base_de_hechos.add(sintoma)
+    if opc == 1:
+        print('  Responde s (sí) o n (no) a cada pregunta')
+        print('=' * 55)
+        print()
+        for sintoma, pregunta in PREGUNTAS.items():
+            resp = input(f'  {pregunta} [s/n]: ').strip().lower()
+            if resp == 's':
+                base_de_hechos.add(sintoma)
 
-    inferir(base_de_conocimiento, base_de_hechos)
+        inferir(base_de_conocimiento, base_de_hechos)
+    elif opc == 2:
+        print('=' * 55)
+        print()
+        meta = input('Ingrese la regla a comprobar (R##):').upper()
+        hechos = set()
+        resultado = backward_chain(meta, base_de_conocimiento, hechos, PREGUNTAS)
+        
+        if resultado:
+            print(f"\n[+] RESULTADO: El diagnóstico {meta} ha sido CONFIRMADO con los síntomas ingresados.")
+        else:
+            print(f"\n[-] RESULTADO: El diagnóstico {meta} ha sido DESCARTADO porque faltan síntomas clave.")
+    else:
+        print('Opción inválida')
+
+
+def backward_chain(meta, base_conocimiento, hechos, preguntas_dict, visitados=None):
+    """
+    Evalúa si se puede llegar a una 'meta' (diagnóstico/regla) mediante encadenamiento hacia atrás.
+    """
+    # Inicializamos el set de nodos visitados para evitar ciclos infinitos en reglas cruzadas
+    if visitados is None:
+        visitados = set()
+        
+    if meta in visitados:
+        return False
+    visitados.add(meta)
+
+    # CASO BASE 1: La meta ya es un hecho confirmado previamente
+    if meta in hechos:
+        return True
+
+    # Buscar si la meta es el ID de alguna regla en nuestra base de conocimiento
+    regla = next((r for r in base_conocimiento if r["id"] == meta), None)
+
+    if regla:
+        # Es una regla (diagnóstico). Debemos probar todas sus condiciones recursivamente.
+        print(f"\n[?] Evaluando hipótesis: {regla['descripcion']} ({regla['id']})")
+        todas_cumplidas = True
+        
+        for condicion in regla["condiciones"]:
+            # Llamada recursiva: intentamos probar cada condición de la regla
+            if not backward_chain(condicion, base_conocimiento, hechos, preguntas_dict, visitados):
+                todas_cumplidas = False
+                print(f"    [-] Se descartó '{regla['id']}' porque falla la condición: {condicion}")
+                break # Fallo rápido: si una condición no se cumple, la regla se descarta
+        
+        if todas_cumplidas:
+            print(f"    [+] ¡Hipótesis '{regla['id']}' confirmada!")
+            return True
+        else:
+            return False
+
+    else:
+        # CASO BASE 2: No es una regla, es un síntoma (hoja del árbol).
+        # Como no está en los 'hechos' y no hay reglas para deducirlo, preguntamos al usuario.
+        if meta in preguntas_dict:
+            respuesta = input(f"  {preguntas_dict[meta]} [s/n]: ").strip().lower()
+            if respuesta == 's':
+                hechos.add(meta) # Guardamos el hecho para no volver a preguntar
+                return True
+            else:
+                return False
+        else:
+            print(f"  ⚠ Advertencia: No se reconoce el síntoma ni la regla '{meta}'.")
+            return False
 
 
 # Ejecutar
